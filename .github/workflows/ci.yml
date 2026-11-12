@@ -1,6 +1,11 @@
 name: Upload nightly conda packages
 on:
   workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Build everything without uploading"
+        type: boolean
+        default: false
   schedule:
     - cron: "0 0 * * *" # once per day
 
@@ -28,17 +33,31 @@ jobs:
           - platform: win-64
             runs-on: windows-2025
 
+    defaults:
+      run:
+        working-directory: scipy
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: scipy/scipy
+          path: scipy
           submodules: recursive
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: nightlies
           persist-credentials: false
 
       - uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
         with:
+          manifest-path: scipy/pixi.toml
           cache: false
           run-install: false
+
+      - name: set the nightly version
+        run: pixi run --experimental --script ../nightlies/scripts/set-version.nu
 
       - name: build the package
         run: pixi publish --target-dir dist
@@ -47,11 +66,10 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: releases-${{ matrix.platform }}
-          path: dist/*.conda
+          path: scipy/dist/*.conda
 
   upload:
     needs: build-artifacts
-    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
 
     environment:
@@ -80,8 +98,16 @@ jobs:
         with:
           run-install: false
 
+      - name: List packages (dry run)
+        if: inputs.dry-run
+        run: |
+          echo "Dry run: these packages would be uploaded:"
+          ls -l dist/scipy-*.conda
+
       - name: Upload packages
         id: upload
+        # scheduled runs have no inputs, so `!inputs.dry-run` is true for them
+        if: ${{ !inputs.dry-run }}
         run: |
           pixi upload prefix \
             -vvv \
