@@ -1,6 +1,11 @@
 name: Upload nightly conda packages
 on:
   workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Build everything without uploading"
+        type: boolean
+        default: false
   schedule:
     - cron: "0 0 * * *" # once per day
 
@@ -65,7 +70,6 @@ jobs:
 
   upload:
     needs: build-artifacts
-    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
 
     environment:
@@ -94,8 +98,16 @@ jobs:
         with:
           run-install: false
 
+      - name: List packages (dry run)
+        if: inputs.dry-run
+        run: |
+          echo "Dry run: these packages would be uploaded:"
+          ls -l dist/scipy-*.conda
+
       - name: Upload packages
         id: upload
+        # scheduled runs have no inputs, so `!inputs.dry-run` is true for them
+        if: ${{ !inputs.dry-run }}
         run: |
           pixi upload prefix \
             -vvv \
