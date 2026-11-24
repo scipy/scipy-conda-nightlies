@@ -115,7 +115,7 @@ jobs:
             -vvv \
             -c scientific-python/scientific-python-nightly \
             --generate-attestation \
-            --force \
+            --skip-existing \
             dist/scipy-*.conda
 
 #       - name: Report failures
